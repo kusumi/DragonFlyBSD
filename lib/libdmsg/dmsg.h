@@ -251,7 +251,7 @@ struct dmsg_ioq {
 	int		error;
 	int		seq;			/* salt sequencer */
 	int		msgcount;
-	EVP_CIPHER_CTX	ctx;
+	EVP_CIPHER_CTX	*ctx;
 	char		iv[DMSG_MAX_IV_SIZE]; /* encrypt or decrypt iv[] */
 	dmsg_msg_t	*msg;
 	dmsg_msg_queue_t msgq;

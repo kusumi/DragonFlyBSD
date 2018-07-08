@@ -114,13 +114,14 @@ dmsg_crypto_gcm_init(dmsg_ioq_t *ioq, char *key, int klen,
 		dmx_printf(6, "%02x", (unsigned char)iv_fixed[i]);
 	dmx_printf(6, "%s\n", " (fixed part only)");
 
-	EVP_CIPHER_CTX_init(&ioq->ctx);
+	ioq->ctx = EVP_CIPHER_CTX_new();
+	EVP_CIPHER_CTX_init(ioq->ctx);
 
 	if (enc)
-		ok = EVP_EncryptInit_ex(&ioq->ctx, EVP_aes_256_gcm(), NULL,
+		ok = EVP_EncryptInit_ex(ioq->ctx, EVP_aes_256_gcm(), NULL,
 					key, NULL);
 	else
-		ok = EVP_DecryptInit_ex(&ioq->ctx, EVP_aes_256_gcm(), NULL,
+		ok = EVP_DecryptInit_ex(ioq->ctx, EVP_aes_256_gcm(), NULL,
 					key, NULL);
 	if (!ok)
 		goto fail;
@@ -143,7 +144,7 @@ dmsg_crypto_gcm_init(dmsg_ioq_t *ioq, char *key, int klen,
 	 * With a chunk size of 64 bytes, this adds up to 1 zettabyte of
 	 * traffic.
 	 */
-	ok = EVP_CIPHER_CTX_ctrl(&ioq->ctx, EVP_CTRL_GCM_SET_IVLEN,
+	ok = EVP_CIPHER_CTX_ctrl(ioq->ctx, EVP_CTRL_GCM_SET_IVLEN,
 				 DMSG_CRYPTO_GCM_IV_SIZE, NULL);
 	if (!ok)
 		goto fail;
@@ -159,7 +160,7 @@ dmsg_crypto_gcm_init(dmsg_ioq_t *ioq, char *key, int klen,
 	 * as GCM, will cause an error in _finish if the pt/ct size is not
 	 * a multiple of the cipher block size.
 	 */
-	EVP_CIPHER_CTX_set_padding(&ioq->ctx, 0);
+	EVP_CIPHER_CTX_set_padding(ioq->ctx, 0);
 
 	return 0;
 
@@ -203,22 +204,22 @@ dmsg_crypto_gcm_encrypt_chunk(dmsg_ioq_t *ioq, char *ct, char *pt,
 	*out_size = 0;
 
 	/* Re-initialize with new IV (but without redoing the key schedule) */
-	ok = EVP_EncryptInit_ex(&ioq->ctx, NULL, NULL, NULL, ioq->iv);
+	ok = EVP_EncryptInit_ex(ioq->ctx, NULL, NULL, NULL, ioq->iv);
 	if (!ok)
 		goto fail;
 
 	u_len = 0;	/* safety */
-	ok = EVP_EncryptUpdate(&ioq->ctx, ct, &u_len, pt, in_size);
+	ok = EVP_EncryptUpdate(ioq->ctx, ct, &u_len, pt, in_size);
 	if (!ok)
 		goto fail;
 
 	f_len = 0;	/* safety */
-	ok = EVP_EncryptFinal(&ioq->ctx, ct + u_len, &f_len);
+	ok = EVP_EncryptFinal(ioq->ctx, ct + u_len, &f_len);
 	if (!ok)
 		goto fail;
 
 	/* Retrieve auth tag */
-	ok = EVP_CIPHER_CTX_ctrl(&ioq->ctx, EVP_CTRL_GCM_GET_TAG,
+	ok = EVP_CIPHER_CTX_ctrl(ioq->ctx, EVP_CTRL_GCM_GET_TAG,
 				 DMSG_CRYPTO_GCM_TAG_SIZE,
 				 ct + u_len + f_len);
 	if (!ok)
@@ -252,13 +253,13 @@ dmsg_crypto_gcm_decrypt_chunk(dmsg_ioq_t *ioq, char *ct, char *pt,
 	*consume_size = 0;
 
 	/* Re-initialize with new IV (but without redoing the key schedule) */
-	ok = EVP_DecryptInit_ex(&ioq->ctx, NULL, NULL, NULL, ioq->iv);
+	ok = EVP_DecryptInit_ex(ioq->ctx, NULL, NULL, NULL, ioq->iv);
 	if (!ok) {
 		ioq->error = DMSG_IOQ_ERROR_ALGO;
 		goto fail_out;
 	}
 
-	ok = EVP_CIPHER_CTX_ctrl(&ioq->ctx, EVP_CTRL_GCM_SET_TAG,
+	ok = EVP_CIPHER_CTX_ctrl(ioq->ctx, EVP_CTRL_GCM_SET_TAG,
 				 DMSG_CRYPTO_GCM_TAG_SIZE,
 				 ct + out_size);
 	if (!ok) {
@@ -266,11 +267,11 @@ dmsg_crypto_gcm_decrypt_chunk(dmsg_ioq_t *ioq, char *ct, char *pt,
 		goto fail_out;
 	}
 
-	ok = EVP_DecryptUpdate(&ioq->ctx, pt, &u_len, ct, out_size);
+	ok = EVP_DecryptUpdate(ioq->ctx, pt, &u_len, ct, out_size);
 	if (!ok)
 		goto fail;
 
-	ok = EVP_DecryptFinal(&ioq->ctx, pt + u_len, &f_len);
+	ok = EVP_DecryptFinal(ioq->ctx, pt + u_len, &f_len);
 	if (!ok)
 		goto fail;
 
